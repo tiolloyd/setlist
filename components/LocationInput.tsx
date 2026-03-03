@@ -1,11 +1,25 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { MapPin, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { geocodeQuery } from "@/lib/geocoding";
 import type { LocationData } from "@/types";
+
+interface NominatimResult {
+  lat: string;
+  lon: string;
+  display_name: string;
+  address?: {
+    city?: string;
+    town?: string;
+    village?: string;
+    county?: string;
+    state?: string;
+    country?: string;
+  };
+}
 
 // "Portland, Multnomah County, Oregon, United States" → "Portland, Oregon"
 function formatDisplayName(raw: string): string {
@@ -14,6 +28,27 @@ function formatDisplayName(raw: string): string {
     return `${parts[0]}, ${parts[parts.length - 2]}`;
   }
   return raw;
+}
+
+function formatSuggestion(result: NominatimResult): { primary: string; secondary: string } {
+  const addr = result.address;
+  const city = addr?.city ?? addr?.town ?? addr?.village ?? addr?.county ?? "";
+  const state = addr?.state ?? "";
+  const country = addr?.country ?? "";
+  const primary = city || result.display_name.split(", ")[0];
+  const secondary = [state, country].filter(Boolean).join(", ");
+  return { primary, secondary };
+}
+
+function formatResultDisplayName(result: NominatimResult): string {
+  const addr = result.address;
+  if (addr) {
+    const city = addr.city ?? addr.town ?? addr.village ?? addr.county;
+    const state = addr.state;
+    if (city && state) return `${city}, ${state}`;
+    if (city) return city;
+  }
+  return formatDisplayName(result.display_name);
 }
 
 interface LocationInputProps {
@@ -26,10 +61,80 @@ export function LocationInput({ value, onChange }: LocationInputProps) {
   const [geoLoading, setGeoLoading] = useState(false);
   const [searchLoading, setSearchLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<NominatimResult[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+
+  const containerRef = useRef<HTMLDivElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestQueryRef = useRef("");
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  async function fetchSuggestions(q: string) {
+    latestQueryRef.current = q;
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=5&addressdetails=1`,
+        {
+          headers: {
+            "User-Agent": "ConcertPlaylistApp/1.0 (tiolloyd@gmail.com)",
+            "Accept-Language": "en",
+          },
+        }
+      );
+      const data: NominatimResult[] = await res.json();
+      if (latestQueryRef.current === q) {
+        setSuggestions(data);
+        setShowDropdown(data.length > 0);
+      }
+    } catch {
+      // Fail silently — user can still submit manually
+    }
+  }
+
+  function handleQueryChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const val = e.target.value;
+    setQuery(val);
+    setError(null);
+
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (!val.trim()) {
+      setSuggestions([]);
+      setShowDropdown(false);
+      return;
+    }
+
+    debounceRef.current = setTimeout(() => {
+      void fetchSuggestions(val.trim());
+    }, 300);
+  }
+
+  function handleSuggestionSelect(result: NominatimResult) {
+    onChange({
+      lat: parseFloat(result.lat),
+      lng: parseFloat(result.lon),
+      displayName: formatResultDisplayName(result),
+    });
+    setQuery("");
+    setSuggestions([]);
+    setShowDropdown(false);
+    setError(null);
+  }
 
   async function useMyLocation() {
     setError(null);
     setGeoLoading(true);
+    setShowDropdown(false);
     try {
       const position = await new Promise<GeolocationPosition>((resolve, reject) =>
         navigator.geolocation.getCurrentPosition(resolve, reject, {
@@ -38,7 +143,6 @@ export function LocationInput({ value, onChange }: LocationInputProps) {
       );
       const { latitude: lat, longitude: lng } = position.coords;
 
-      // Reverse geocode to get display name
       const res = await fetch(
         `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`,
         {
@@ -74,8 +178,16 @@ export function LocationInput({ value, onChange }: LocationInputProps) {
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     if (!query.trim()) return;
+
+    // If suggestions are showing, select the first one
+    if (showDropdown && suggestions.length > 0) {
+      handleSuggestionSelect(suggestions[0]);
+      return;
+    }
+
     setError(null);
     setSearchLoading(true);
+    setShowDropdown(false);
     try {
       const result = await geocodeQuery(query.trim());
       if (!result) {
@@ -110,13 +222,48 @@ export function LocationInput({ value, onChange }: LocationInputProps) {
         </Button>
 
         <form onSubmit={handleSearch} className="flex gap-2 flex-1">
-          <Input
-            type="text"
-            placeholder="City or ZIP code…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            disabled={geoLoading || searchLoading}
-          />
+          <div className="relative flex-1" ref={containerRef}>
+            <Input
+              type="text"
+              placeholder="City or ZIP code…"
+              value={query}
+              onChange={handleQueryChange}
+              onFocus={() => {
+                if (suggestions.length > 0) setShowDropdown(true);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setShowDropdown(false);
+              }}
+              disabled={geoLoading || searchLoading}
+              autoComplete="off"
+            />
+
+            {showDropdown && suggestions.length > 0 && (
+              <div className="absolute top-full left-0 right-0 z-50 mt-0.5 bg-brand-black border border-brand-gray-light shadow-lg divide-y divide-brand-gray-light">
+                {suggestions.map((result, i) => {
+                  const { primary, secondary } = formatSuggestion(result);
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onMouseDown={(e) => {
+                        // Prevent input blur so the click registers
+                        e.preventDefault();
+                        handleSuggestionSelect(result);
+                      }}
+                      className="w-full text-left px-3 py-2.5 border-l-2 border-transparent hover:border-brand-red hover:bg-brand-red/10 transition-colors flex flex-col gap-0.5"
+                    >
+                      <span className="text-sm text-brand-white font-medium">{primary}</span>
+                      {secondary && (
+                        <span className="text-xs text-muted-foreground">{secondary}</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
           <Button type="submit" disabled={!query.trim() || geoLoading || searchLoading}>
             {searchLoading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
