@@ -3,7 +3,7 @@
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { addMonths, format } from "date-fns";
-import { Search } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -17,6 +17,7 @@ import { LocationInput } from "@/components/LocationInput";
 import { RadiusSlider } from "@/components/RadiusSlider";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { useMusicService } from "@/contexts/MusicServiceContext";
+import { useConcerts } from "@/contexts/ConcertsContext";
 import type { LocationData } from "@/types";
 
 const today = format(new Date(), "yyyy-MM-dd");
@@ -39,6 +40,7 @@ function SearchContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { selectedService } = useMusicService();
+  const { setResults } = useConcerts();
 
   const [settings, setSettings] = useState<SearchSettings>(() => {
     const lat = parseFloat(searchParams.get("lat") ?? "");
@@ -60,6 +62,7 @@ function SearchContent() {
   });
 
   const [validationError, setValidationError] = useState<string | null>(null);
+  const [fetching, setFetching] = useState(false);
 
   function patch<K extends keyof SearchSettings>(
     key: K,
@@ -69,7 +72,7 @@ function SearchContent() {
     setValidationError(null);
   }
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
     if (!settings.location) {
@@ -82,7 +85,10 @@ function SearchContent() {
       return;
     }
 
-    const params = new URLSearchParams({
+    setFetching(true);
+    setValidationError(null);
+
+    const concertParams = new URLSearchParams({
       lat: String(settings.location.lat),
       lng: String(settings.location.lng),
       locationName: settings.location.displayName,
@@ -92,7 +98,29 @@ function SearchContent() {
       service: selectedService,
     });
 
-    router.push(`/results?${params}`);
+    try {
+      const res = await fetch(`/api/concerts?${concertParams}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error ?? `HTTP ${res.status}`);
+      }
+
+      const paramString = concertParams.toString();
+      setResults(data.artists ?? [], data.genreTree ?? [], paramString);
+
+      // Skip genre picker if there's no usable genre data
+      if ((data.genreTree ?? []).length === 0) {
+        router.push(`/results?${paramString}`);
+      } else {
+        router.push("/genres");
+      }
+    } catch (err) {
+      setValidationError(
+        err instanceof Error ? err.message : "Search failed. Please try again."
+      );
+      setFetching(false);
+    }
   }
 
   const serviceLabel = selectedService
@@ -161,9 +189,18 @@ function SearchContent() {
               </p>
             )}
 
-            <Button type="submit" size="lg" className="w-full">
-              <Search className="h-5 w-5 mr-2" />
-              Find Concerts
+            <Button
+              type="submit"
+              size="lg"
+              className="w-full"
+              disabled={fetching}
+            >
+              {fetching ? (
+                <Loader2 className="h-5 w-5 mr-2 animate-spin" />
+              ) : (
+                <Search className="h-5 w-5 mr-2" />
+              )}
+              {fetching ? "Searching…" : "Find Concerts"}
             </Button>
           </CardContent>
         </Card>

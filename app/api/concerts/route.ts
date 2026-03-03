@@ -25,8 +25,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const artists = await fetchConcerts({ lat, lng, radius, startDate, endDate });
-    return NextResponse.json({ artists });
+    const { artists, genreTree } = await fetchConcerts({ lat, lng, radius, startDate, endDate });
+    return NextResponse.json({ artists, genreTree });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error("[/api/concerts] Error:", message);

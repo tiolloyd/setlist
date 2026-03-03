@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, useMemo, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,12 +14,14 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { ConcertList } from "@/components/ConcertList";
 import { PlaylistBuilder } from "@/components/PlaylistBuilder";
+import { useConcerts } from "@/contexts/ConcertsContext";
 import type { MusicService } from "@/types";
 import type { ArtistWithConcerts } from "@/lib/ticketmaster";
 
 function ResultsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { artists: contextArtists, selectedGenreIds } = useConcerts();
 
   const lat = parseFloat(searchParams.get("lat") ?? "");
   const lng = parseFloat(searchParams.get("lng") ?? "");
@@ -29,8 +31,11 @@ function ResultsContent() {
   const service = (searchParams.get("service") ?? null) as MusicService | null;
   const locationName = searchParams.get("locationName") ?? "your area";
 
-  const [artists, setArtists] = useState<ArtistWithConcerts[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Use context data if available (normal flow); otherwise fetch directly (deep link / refresh)
+  const hasContextData = contextArtists.length > 0;
+
+  const [fetchedArtists, setFetchedArtists] = useState<ArtistWithConcerts[]>([]);
+  const [loading, setLoading] = useState(!hasContextData);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
   async function loadConcerts() {
@@ -59,7 +64,7 @@ function ResultsContent() {
         throw new Error(data.error ?? `HTTP ${res.status}`);
       }
 
-      setArtists(data.artists ?? []);
+      setFetchedArtists(data.artists ?? []);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Unknown error";
       setFetchError(msg);
@@ -69,9 +74,21 @@ function ResultsContent() {
   }
 
   useEffect(() => {
+    if (hasContextData) return; // already have data from the normal flow
     void loadConcerts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Apply genre filter if any IDs are selected; otherwise show everything
+  const artists = useMemo(() => {
+    const source = hasContextData ? contextArtists : fetchedArtists;
+    if (selectedGenreIds.length === 0) return source;
+    return source.filter(
+      (a) =>
+        a.genreIds.some((id) => selectedGenreIds.includes(id)) ||
+        a.subGenreIds.some((id) => selectedGenreIds.includes(id))
+    );
+  }, [hasContextData, contextArtists, fetchedArtists, selectedGenreIds]);
 
   const serviceLabel =
     service === "spotify"
@@ -80,6 +97,11 @@ function ResultsContent() {
       ? "Apple Music"
       : null;
 
+  // Back goes to genres page if we came through the normal flow, search otherwise
+  const backHref = hasContextData
+    ? "/genres"
+    : `/search?${searchParams.toString()}`;
+
   return (
     <div className="container mx-auto px-4 py-8 max-w-5xl">
       {/* Back button */}
@@ -87,10 +109,10 @@ function ResultsContent() {
         variant="ghost"
         size="sm"
         className="mb-6 -ml-2"
-        onClick={() => router.push(`/search?${searchParams.toString()}`)}
+        onClick={() => router.push(backHref)}
       >
         <ArrowLeft className="h-4 w-4 mr-2" />
-        Back to Search
+        {hasContextData ? "Back to Genres" : "Back to Search"}
       </Button>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -141,6 +163,9 @@ function ResultsContent() {
             </h2>
             <p className="text-sm text-muted-foreground mt-1">
               {radius} mile radius · {startDate} → {endDate}
+              {selectedGenreIds.length > 0 && (
+                <span className="ml-2 text-brand-red">· genre filter active</span>
+              )}
             </p>
           </div>
 
