@@ -128,14 +128,14 @@ export function LocationInput({ value, onChange }: LocationInputProps) {
       </div>
 
       {value && (
-        <p className="text-sm text-green-700 bg-green-50 px-3 py-2 rounded-md flex items-center gap-1.5">
+        <p className="text-sm text-green-400 bg-green-950 border border-green-700 px-3 py-2 rounded-sm flex items-center gap-1.5">
           <MapPin className="h-3.5 w-3.5 shrink-0" />
           <span className="line-clamp-1">{value.displayName}</span>
         </p>
       )}
 
       {error && (
-        <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-md">
+        <p className="text-sm text-brand-red bg-brand-gray border border-brand-red px-3 py-2 rounded-sm">
           {error}
         </p>
       )}

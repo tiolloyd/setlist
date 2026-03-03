@@ -82,13 +82,9 @@ function HomeContent() {
   return (
     <div className="container mx-auto px-4 py-12 max-w-2xl">
       <div className="text-center mb-10">
-        <h2 className="text-4xl font-bold tracking-tight mb-3">
-          Find Concerts,{" "}
-          <span className="text-primary">Build Playlists</span>
-        </h2>
-        <p className="text-muted-foreground text-lg max-w-lg mx-auto">
-          Discover upcoming concerts near you and create playlists of those
-          artists' music on your favorite streaming service.
+        <h2 className="logo-title mb-3">Setlist</h2>
+        <p className="logo-tagline max-w-lg mx-auto">
+          find concerts, make Playlists
         </p>
       </div>
 
@@ -140,7 +136,7 @@ function HomeContent() {
             </div>
 
             {validationError && (
-              <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-md">
+              <p className="text-sm text-brand-red bg-brand-gray border border-brand-red px-3 py-2 rounded-sm">
                 {validationError}
               </p>
             )}

@@ -59,12 +59,12 @@ export function ServiceSelector({ value, onChange }: ServiceSelectorProps) {
               onChange(service.id);
             }}
             className={cn(
-              "relative rounded-xl border-2 p-4 text-left transition-all",
+              "relative rounded-sm border-2 p-4 text-left transition-all",
               service.comingSoon
-                ? "opacity-60 cursor-not-allowed border-gray-200 bg-gray-50"
+                ? "bg-brand-black opacity-40 cursor-not-allowed border-brand-gray-light"
                 : value === service.id
                 ? "border-primary bg-primary/5 shadow-sm"
-                : "border-gray-200 bg-white hover:border-gray-300 hover:shadow-sm"
+                : "border-brand-gray-light bg-brand-gray hover:border-brand-red/50 hover:shadow-sm"
             )}
           >
             {service.comingSoon && (
@@ -88,7 +88,7 @@ export function ServiceSelector({ value, onChange }: ServiceSelectorProps) {
               {service.description}
             </p>
             {value === service.id && !service.comingSoon && (
-              <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
+              <div className="absolute top-2 right-2 w-4 h-4 rounded-sm bg-primary flex items-center justify-center">
                 <svg
                   className="w-2.5 h-2.5 text-white"
                   fill="currentColor"

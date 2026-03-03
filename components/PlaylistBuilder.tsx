@@ -156,17 +156,17 @@ export function PlaylistBuilder({ service, artists }: PlaylistBuilderProps) {
     if (result.manualTracks) {
       return (
         <div className="space-y-3">
-          <Card className="border-green-200 bg-green-50">
+          <Card className="border-green-700 bg-green-950">
             <CardContent className="p-5">
               <div className="flex items-start gap-3">
-                <CheckCircle2 className="h-5 w-5 text-green-600 shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-5 w-5 text-green-400 shrink-0 mt-0.5" />
                 <div className="space-y-1.5">
-                  <h3 className="font-semibold text-green-800">Your playlist is ready!</h3>
+                  <h3 className="font-semibold text-green-400">Your playlist is ready!</h3>
                   <a
                     href={result.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700 underline hover:text-green-900"
+                    className="inline-flex items-center gap-1.5 text-sm font-medium text-green-400 underline hover:text-green-300"
                   >
                     Open in Spotify
                     <ExternalLink className="h-3.5 w-3.5" />
@@ -176,11 +176,11 @@ export function PlaylistBuilder({ service, artists }: PlaylistBuilderProps) {
             </CardContent>
           </Card>
 
-          <Card className="border-amber-200 bg-amber-50">
+          <Card className="border-amber-700 bg-amber-950">
             <CardContent className="p-5 space-y-3">
               <div className="flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-800">
+                <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-400">
                   Due to Spotify API limitations, tracks couldn&apos;t be added automatically.
                   We found <strong>{result.manualTracks.length} tracks</strong> below — open the
                   playlist in Spotify and add them manually.
@@ -193,10 +193,10 @@ export function PlaylistBuilder({ service, artists }: PlaylistBuilderProps) {
                     href={`https://open.spotify.com/track/${track.uri.replace("spotify:track:", "")}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex items-baseline gap-1.5 text-xs text-amber-900 hover:text-amber-700 hover:underline"
+                    className="flex items-baseline gap-1.5 text-xs text-amber-400 hover:text-amber-300 hover:underline"
                   >
                     <span className="font-medium truncate">{track.name}</span>
-                    <span className="text-amber-600 shrink-0">— {track.artistName}</span>
+                    <span className="text-amber-400 shrink-0">— {track.artistName}</span>
                   </a>
                 ))}
               </div>
@@ -208,13 +208,13 @@ export function PlaylistBuilder({ service, artists }: PlaylistBuilderProps) {
 
     // Happy path: tracks were added successfully
     return (
-      <Card className="border-green-200 bg-green-50">
+      <Card className="border-green-700 bg-green-950">
         <CardContent className="p-6">
           <div className="flex items-start gap-3">
-            <CheckCircle2 className="h-6 w-6 text-green-600 shrink-0 mt-0.5" />
+            <CheckCircle2 className="h-6 w-6 text-green-400 shrink-0 mt-0.5" />
             <div className="space-y-2">
-              <h3 className="font-semibold text-green-800">Playlist Created!</h3>
-              <p className="text-sm text-green-700">
+              <h3 className="font-semibold text-green-400">Playlist Created!</h3>
+              <p className="text-sm text-green-400">
                 Added <strong>{result.trackCount} tracks</strong> to &quot;
                 {result.name}&quot; on {serviceLabel}.
               </p>
@@ -222,7 +222,7 @@ export function PlaylistBuilder({ service, artists }: PlaylistBuilderProps) {
                 href={result.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-green-700 underline hover:text-green-900"
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-green-400 underline hover:text-green-300"
               >
                 Open playlist
                 <ExternalLink className="h-3.5 w-3.5" />
@@ -277,7 +277,7 @@ export function PlaylistBuilder({ service, artists }: PlaylistBuilderProps) {
                     ) : isCurrent ? (
                       <Loader2 className="h-4 w-4 animate-spin text-primary" />
                     ) : (
-                      <div className="h-4 w-4 rounded-full border-2 border-muted-foreground/30" />
+                      <div className="h-4 w-4 rounded-sm border-2 border-muted-foreground/30" />
                     )}
                     <span
                       className={
@@ -299,11 +299,11 @@ export function PlaylistBuilder({ service, artists }: PlaylistBuilderProps) {
       )}
 
       {step === "error" && error && (
-        <Card className="border-red-200 bg-red-50">
+        <Card className="border-brand-red bg-brand-gray">
           <CardContent className="p-4 flex items-start gap-3">
-            <XCircle className="h-5 w-5 text-red-500 shrink-0 mt-0.5" />
+            <XCircle className="h-5 w-5 text-brand-red shrink-0 mt-0.5" />
             <div className="space-y-2">
-              <p className="text-sm text-red-700">{error}</p>
+              <p className="text-sm text-brand-red">{error}</p>
               <Button
                 size="sm"
                 variant="outline"

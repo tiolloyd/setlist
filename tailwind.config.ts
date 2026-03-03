@@ -15,6 +15,16 @@ const config: Config = {
         "2xl": "1400px",
       },
     },
+    borderRadius: {
+      none: "0px",
+      sm: "2px",
+      DEFAULT: "2px",
+      md: "4px",
+      lg: "4px",
+      xl: "4px",
+      "2xl": "4px",
+      full: "9999px",
+    },
     extend: {
       colors: {
         border: "hsl(var(--border))",
@@ -50,11 +60,15 @@ const config: Config = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        "brand-black": "#0a0a0a",
+        "brand-red": "#CC0000",
+        "brand-red-dark": "#990000",
+        "brand-white": "#F5F5F5",
+        "brand-gray": "#1a1a1a",
+        "brand-gray-light": "#2a2a2a",
       },
-      borderRadius: {
-        lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+      fontFamily: {
+        sans: ["var(--font-barlow)", "sans-serif"],
       },
       keyframes: {
         "accordion-down": {

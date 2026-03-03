@@ -47,7 +47,7 @@ export function ConcertList({ artists }: ConcertListProps) {
           >
             <CardContent className="p-4">
               <div className="flex items-start gap-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-400 to-blue-500 flex items-center justify-center shrink-0 overflow-hidden">
+                <div className="w-10 h-10 rounded-sm bg-brand-gray-light flex items-center justify-center shrink-0 overflow-hidden">
                   {artist.imageUrl ? (
                     <img
                       src={artist.imageUrl}

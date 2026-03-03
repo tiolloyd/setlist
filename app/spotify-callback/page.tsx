@@ -66,7 +66,7 @@ function SpotifyCallbackContent() {
 
       {status === "success" && (
         <div className="space-y-4">
-          <CheckCircle2 className="h-10 w-10 text-green-500 mx-auto" />
+          <CheckCircle2 className="h-10 w-10 text-green-400 mx-auto" />
           <p className="text-lg font-medium">Connected to Spotify!</p>
           <p className="text-muted-foreground text-sm">
             Returning to your results…
@@ -76,9 +76,9 @@ function SpotifyCallbackContent() {
 
       {status === "error" && (
         <div className="space-y-4">
-          <XCircle className="h-10 w-10 text-red-500 mx-auto" />
+          <XCircle className="h-10 w-10 text-brand-red mx-auto" />
           <p className="text-lg font-medium">Spotify connection failed</p>
-          <p className="text-sm text-red-600 bg-red-50 px-4 py-2 rounded-md">
+          <p className="text-sm text-brand-red bg-brand-gray border border-brand-red px-4 py-2 rounded-sm">
             {errorMsg}
           </p>
           <Button onClick={() => router.push("/")}>Go back home</Button>

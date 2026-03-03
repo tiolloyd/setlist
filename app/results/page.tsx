@@ -156,12 +156,12 @@ function ResultsContent() {
           )}
 
           {fetchError && (
-            <Card className="border-red-200 bg-red-50">
+            <Card className="border-brand-red bg-brand-gray">
               <CardContent className="p-6 space-y-3">
-                <p className="text-sm text-red-700 font-medium">
+                <p className="text-sm text-brand-red font-medium">
                   Failed to load concerts
                 </p>
-                <p className="text-sm text-red-600">{fetchError}</p>
+                <p className="text-sm text-brand-red">{fetchError}</p>
                 <Button
                   size="sm"
                   variant="outline"
