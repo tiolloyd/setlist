@@ -87,7 +87,7 @@ function ResultsContent() {
         variant="ghost"
         size="sm"
         className="mb-6 -ml-2"
-        onClick={() => router.push(`/?${searchParams.toString()}`)}
+        onClick={() => router.push(`/search?${searchParams.toString()}`)}
       >
         <ArrowLeft className="h-4 w-4 mr-2" />
         Back to Search
