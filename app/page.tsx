@@ -72,7 +72,7 @@ export default function LandingPage() {
       {/* Wordmark */}
       <div className="text-center mb-16">
         <h1 className="logo-title mb-4">Setlist</h1>
-        <p className="logo-tagline">find concerts, make Playlists</p>
+        <p className="logo-tagline">find concerts, make playlists</p>
       </div>
 
       {/* Provider selection */}
