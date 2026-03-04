@@ -4,12 +4,10 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
-  AlertTriangle,
   CheckCircle2,
   ExternalLink,
   Loader2,
   Music,
-  XCircle,
 } from "lucide-react";
 import {
   initiateSpotifyAuth,
@@ -155,53 +153,39 @@ export function PlaylistBuilder({ service, artists }: PlaylistBuilderProps) {
     // Fallback: playlist created but tracks couldn't be added automatically
     if (result.manualTracks) {
       return (
-        <div className="space-y-3">
-          <Card className="border-green-700 bg-green-950">
-            <CardContent className="p-5">
-              <div className="flex items-start gap-3">
-                <CheckCircle2 className="h-5 w-5 text-green-400 shrink-0 mt-0.5" />
-                <div className="space-y-1.5">
-                  <h3 className="font-semibold text-green-400">Your playlist is ready!</h3>
-                  <a
-                    href={result.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-sm font-medium text-green-400 underline hover:text-green-300"
-                  >
-                    Open in Spotify
-                    <ExternalLink className="h-3.5 w-3.5" />
-                  </a>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="space-y-4">
+          <a
+            href={result.url ?? "https://open.spotify.com"}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-primary flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold w-full"
+          >
+            Open Spotify
+            <ExternalLink className="h-4 w-4" />
+          </a>
 
-          <Card className="border-amber-700 bg-amber-950">
-            <CardContent className="p-5 space-y-3">
-              <div className="flex items-start gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-400">
-                  Due to Spotify API limitations, tracks couldn&apos;t be added automatically.
-                  We found <strong>{result.manualTracks.length} tracks</strong> below — open the
-                  playlist in Spotify and add them manually.
-                </p>
-              </div>
-              <div className="space-y-1 max-h-60 overflow-y-auto pr-1">
-                {result.manualTracks.map((track) => (
-                  <a
-                    key={track.uri}
-                    href={`https://open.spotify.com/track/${track.uri.replace("spotify:track:", "")}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-baseline gap-1.5 text-xs text-amber-400 hover:text-amber-300 hover:underline"
-                  >
-                    <span className="font-medium truncate">{track.name}</span>
-                    <span className="text-amber-400 shrink-0">— {track.artistName}</span>
-                  </a>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            We&apos;re still working on full Spotify connectivity — here are your concert
+            playlist tracks in the meantime.
+          </p>
+
+          <div className="border border-brand-gray-light divide-y divide-brand-gray-light max-h-72 overflow-y-auto">
+            {result.manualTracks.map((track) => (
+              <a
+                key={track.uri}
+                href={`https://open.spotify.com/track/${track.uri.replace("spotify:track:", "")}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center justify-between px-3 py-2.5 gap-3 hover:bg-brand-gray-light/30 transition-colors group"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-brand-white truncate">{track.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">{track.artistName}</p>
+                </div>
+                <ExternalLink className="h-3.5 w-3.5 text-brand-gray-light group-hover:text-brand-red transition-colors shrink-0" />
+              </a>
+            ))}
+          </div>
         </div>
       );
     }
@@ -298,25 +282,32 @@ export function PlaylistBuilder({ service, artists }: PlaylistBuilderProps) {
         </Card>
       )}
 
-      {step === "error" && error && (
-        <Card className="border-brand-red bg-brand-gray">
-          <CardContent className="p-4 flex items-start gap-3">
-            <XCircle className="h-5 w-5 text-brand-red shrink-0 mt-0.5" />
-            <div className="space-y-2">
-              <p className="text-sm text-brand-red">{error}</p>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setStep("idle");
-                  setError(null);
-                }}
-              >
-                Try again
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      {step === "error" && (
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            We&apos;re still working on full Spotify connectivity. Try connecting again below.
+          </p>
+          <a
+            href="https://open.spotify.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="btn-secondary flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold w-full"
+          >
+            Open Spotify
+            <ExternalLink className="h-4 w-4" />
+          </a>
+          <Button
+            size="sm"
+            variant="outline"
+            className="w-full"
+            onClick={() => {
+              setStep("idle");
+              setError(null);
+            }}
+          >
+            Try again
+          </Button>
+        </div>
       )}
 
       {hasSpotifyToken && step === "idle" && service === "spotify" && (
