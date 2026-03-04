@@ -21,10 +21,8 @@ export default function GenresPage() {
   // Local genre selection state — committed to context only on "Show Concerts"
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
-  // All genres start expanded
-  const [expanded, setExpanded] = useState<Set<string>>(
-    () => new Set(genreTree.map((g) => g.id))
-  );
+  // All genres start collapsed
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   // Count artists per genre/subGenre id
   const idCounts = useMemo(() => {
@@ -37,6 +35,21 @@ export default function GenresPage() {
     return counts;
   }, [artists]);
 
+  // Only show genres/subGenres with at least 1 artist
+  const visibleGenreTree = useMemo(() => {
+    return genreTree
+      .map((genre) => ({
+        ...genre,
+        subGenres: genre.subGenres.filter(
+          (sub) => (idCounts.get(sub.id) ?? 0) > 0
+        ),
+      }))
+      .filter(
+        (genre) =>
+          (idCounts.get(genre.id) ?? 0) > 0 || genre.subGenres.length > 0
+      );
+  }, [genreTree, idCounts]);
+
   // How many artists match the current selection
   const filteredCount = useMemo(() => {
     if (selected.size === 0) return 0;
@@ -47,26 +60,12 @@ export default function GenresPage() {
     ).length;
   }, [artists, selected]);
 
-  const allGenreIds = genreTree.map((g) => g.id);
-  const allSelected =
-    allGenreIds.length > 0 && allGenreIds.every((id) => selected.has(id));
-
-  function toggleSelectAll() {
-    if (allSelected) {
-      setSelected(new Set());
-    } else {
-      // Select every parent genre (drops any individual subGenre picks)
-      setSelected(new Set(allGenreIds));
-    }
-  }
-
   function toggleGenre(genreId: string, childIds: string[]) {
     setSelected((prev) => {
       const next = new Set(prev);
       if (next.has(genreId)) {
         next.delete(genreId);
       } else {
-        // Select parent → remove any individual child picks for this genre
         next.add(genreId);
         for (const id of childIds) next.delete(id);
       }
@@ -80,7 +79,6 @@ export default function GenresPage() {
       if (next.has(subGenreId)) {
         next.delete(subGenreId);
       } else {
-        // Selecting a child deselects the parent genre
         next.delete(parentId);
         next.add(subGenreId);
       }
@@ -97,7 +95,7 @@ export default function GenresPage() {
     });
   }
 
-  function handleSkip() {
+  function handleShowAll() {
     setSelectedGenreIds([]);
     router.push(`/results?${searchParamString}`);
   }
@@ -125,44 +123,38 @@ export default function GenresPage() {
           </span>
         </p>
         <h2 className="text-xl font-bold text-brand-white tracking-tight">
-          Filter by Genre
+          Concerts near you
         </h2>
+      </div>
+
+      {/* Primary CTA — show everything, no filtering */}
+      <button
+        type="button"
+        onClick={handleShowAll}
+        className="btn-primary w-full py-3 px-6 text-sm font-bold tracking-wide mb-8"
+      >
+        Show All {artists.length} Concerts →
+      </button>
+
+      {/* Optional genre filter */}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="h-px flex-1 bg-brand-gray-light" />
+        <span className="text-xs text-muted-foreground uppercase tracking-wider shrink-0">
+          or filter by genre
+        </span>
+        <div className="h-px flex-1 bg-brand-gray-light" />
       </div>
 
       {/* Genre list */}
       <div className="border border-brand-gray-light">
-
-        {/* Select All row */}
-        <button
-          type="button"
-          onClick={toggleSelectAll}
-          className={cn(
-            "w-full flex items-center justify-between px-4 py-3 border-b border-brand-gray-light text-left transition-colors border-l-2",
-            allSelected
-              ? "border-l-brand-red bg-brand-red/5"
-              : "border-l-transparent hover:bg-brand-gray-light/20"
-          )}
-        >
-          <span
-            className={cn(
-              "text-sm font-semibold uppercase tracking-wider",
-              allSelected ? "text-brand-white" : "text-muted-foreground"
-            )}
-          >
-            Select All
-          </span>
-          <span className="text-xs text-muted-foreground">{artists.length}</span>
-        </button>
-
-        {/* Genre rows */}
-        {genreTree.map((genre, gIdx) => {
+        {visibleGenreTree.map((genre, gIdx) => {
           const isGenreSelected = selected.has(genre.id);
           const someSubSelected = genre.subGenres.some((s) =>
             selected.has(s.id)
           );
           const isExpanded = expanded.has(genre.id);
           const count = idCounts.get(genre.id) ?? 0;
-          const isLastGenre = gIdx === genreTree.length - 1;
+          const isLastGenre = gIdx === visibleGenreTree.length - 1;
 
           return (
             <div key={genre.id}>
@@ -208,7 +200,7 @@ export default function GenresPage() {
                   )}
                 </button>
 
-                {/* Expand/collapse arrow — only toggles visibility of subGenres */}
+                {/* Expand/collapse arrow — only toggles subGenre visibility */}
                 {genre.subGenres.length > 0 && (
                   <button
                     type="button"
@@ -271,34 +263,22 @@ export default function GenresPage() {
         })}
       </div>
 
-      {/* Actions */}
-      <div className="flex items-center justify-between mt-6 gap-4">
-        <button
-          type="button"
-          onClick={handleSkip}
-          className="text-sm text-muted-foreground hover:text-brand-white underline underline-offset-2 transition-colors"
-        >
-          Skip — Show All Concerts
-        </button>
-
-        <button
-          type="button"
-          onClick={handleShowConcerts}
-          disabled={selected.size === 0}
-          className={cn(
-            "btn-primary px-6 py-2.5 text-sm font-bold tracking-wide",
-            selected.size === 0 && "opacity-40 cursor-not-allowed"
-          )}
-        >
-          Show Concerts ({filteredCount})
-        </button>
+      {/* Secondary action: show filtered results */}
+      <div className="flex items-center justify-end mt-6">
+        {selected.size > 0 ? (
+          <button
+            type="button"
+            onClick={handleShowConcerts}
+            className="btn-secondary px-6 py-2.5 text-sm font-bold tracking-wide"
+          >
+            Show Concerts ({filteredCount})
+          </button>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Select genres above to filter results
+          </p>
+        )}
       </div>
-
-      {selected.size === 0 && (
-        <p className="text-xs text-muted-foreground mt-3 text-right">
-          Select genres above, or skip to see everything
-        </p>
-      )}
     </div>
   );
 }

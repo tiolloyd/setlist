@@ -1,5 +1,8 @@
 import type { ConcertDate } from "@/types";
 
+const UNCATEGORIZED_ID = "uncategorized";
+const UNCATEGORIZED_NAME = "Other";
+
 interface TicketmasterClassification {
   primary?: boolean;
   segment?: { id: string; name: string };
@@ -112,6 +115,7 @@ export async function fetchConcerts(params: {
   >();
 
   const artistMap = new Map<string, ArtistWithConcerts>();
+  let hasUncategorized = false;
 
   for (const event of events) {
     // Use primary classification, fall back to first
@@ -131,6 +135,9 @@ export async function fetchConcerts(params: {
       rawSubGenre?.id && rawSubGenre.name && rawSubGenre.name !== "Undefined"
         ? rawSubGenre
         : null;
+
+    // Track events with no usable genre data
+    if (!genre) hasUncategorized = true;
 
     // Build genre tree
     if (genre) {
@@ -184,7 +191,7 @@ export async function fetchConcerts(params: {
           imageUrl: image?.url,
           concertCount: 1,
           dates: [concertDate],
-          genreIds: genre ? [genre.id] : [],
+          genreIds: genre ? [genre.id] : [UNCATEGORIZED_ID],
           subGenreIds: subGenre ? [subGenre.id] : [],
         });
       }
@@ -203,6 +210,11 @@ export async function fetchConcerts(params: {
       subGenres: g.subGenres.sort((a, b) => a.name.localeCompare(b.name)),
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
+
+  // Append "Other" bucket at the end for events with missing/undefined classification
+  if (hasUncategorized) {
+    genreTree.push({ id: UNCATEGORIZED_ID, name: UNCATEGORIZED_NAME, subGenres: [] });
+  }
 
   return { artists, genreTree };
 }
