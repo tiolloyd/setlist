@@ -46,52 +46,85 @@ export async function initiateSpotifyAuth(): Promise<void> {
   const redirectUri = process.env.NEXT_PUBLIC_SPOTIFY_REDIRECT_URI ?? `${window.location.origin}/spotify-callback`;
 
   if (!clientId) {
-    throw new Error("NEXT_PUBLIC_SPOTIFY_CLIENT_ID is not configured");
+    // Caller's catch block will handle this and show the fallback
+    throw new Error("Spotify is not configured");
   }
 
-  const verifier = generateRandomString(64);
-  const challenge = base64urlEncode(await sha256(verifier));
+  try {
+    const verifier = generateRandomString(64);
+    const challenge = base64urlEncode(await sha256(verifier));
 
-  sessionStorage.setItem(VERIFIER_KEY, verifier);
+    sessionStorage.setItem(VERIFIER_KEY, verifier);
 
-  const params = new URLSearchParams({
-    client_id: clientId,
-    response_type: "code",
-    redirect_uri: redirectUri,
-    scope: SPOTIFY_SCOPES,
-    code_challenge_method: "S256",
-    code_challenge: challenge,
-  });
+    const params = new URLSearchParams({
+      client_id: clientId,
+      response_type: "code",
+      redirect_uri: redirectUri,
+      scope: SPOTIFY_SCOPES,
+      code_challenge_method: "S256",
+      code_challenge: challenge,
+    });
 
-  window.location.href = `https://accounts.spotify.com/authorize?${params}`;
+    window.location.href = `https://accounts.spotify.com/authorize?${params}`;
+  } catch (err) {
+    throw err;
+  }
 }
 
 export async function exchangeCodeForTokens(code: string): Promise<SpotifyTokens> {
   const redirectUri = process.env.NEXT_PUBLIC_SPOTIFY_REDIRECT_URI ?? `${window.location.origin}/spotify-callback`;
-  const verifier = sessionStorage.getItem(VERIFIER_KEY);
 
-  if (!verifier) throw new Error("No code verifier found. Please try authenticating again.");
+  let verifier: string | null = null;
+  try {
+    verifier = sessionStorage.getItem(VERIFIER_KEY);
+  } catch {
+    throw new Error("Spotify connection failed");
+  }
+
+  if (!verifier) throw new Error("Spotify connection failed");
 
   // Exchange via server-side route so the client secret stays hidden
-  const res = await fetch("/api/spotify-token", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ code, codeVerifier: verifier, redirectUri }),
-  });
+  let res: Response;
+  try {
+    res = await fetch("/api/spotify-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code, codeVerifier: verifier, redirectUri }),
+    });
+  } catch {
+    throw new Error("Spotify connection failed");
+  }
 
+  // The route always returns 200 — a non-ok status means a server-level failure
   if (!res.ok) {
     throw new Error("Spotify connection failed");
   }
 
-  const data = await res.json();
+  let data: Record<string, unknown>;
+  try {
+    data = await res.json();
+  } catch {
+    throw new Error("Spotify connection failed");
+  }
+
+  // Route returns { error: true } when token exchange fails for any reason
+  if (data.error) {
+    throw new Error("Spotify connection failed");
+  }
+
   const tokens: SpotifyTokens = {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token,
-    expiresAt: Date.now() + data.expires_in * 1000,
+    accessToken: data.access_token as string,
+    refreshToken: data.refresh_token as string,
+    expiresAt: Date.now() + (data.expires_in as number) * 1000,
   };
 
-  sessionStorage.setItem(TOKEN_KEY, JSON.stringify(tokens));
-  sessionStorage.removeItem(VERIFIER_KEY);
+  try {
+    sessionStorage.setItem(TOKEN_KEY, JSON.stringify(tokens));
+    sessionStorage.removeItem(VERIFIER_KEY);
+  } catch {
+    // sessionStorage failure is non-fatal — tokens still returned
+  }
+
   return tokens;
 }
 
@@ -132,8 +165,8 @@ async function spotifyFetch(
     },
   });
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Spotify API ${path} → ${res.status}: ${err}`);
+    // Do NOT include Spotify's raw error body — it may contain INVALID_CLIENT etc.
+    throw new Error(`Spotify API error ${res.status}`);
   }
   return res;
 }
