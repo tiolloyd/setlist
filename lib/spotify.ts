@@ -1,11 +1,4 @@
-import type { SpotifyTokens, SpotifyTrack } from "@/types";
-
-class SpotifyForbiddenError extends Error {
-  constructor() {
-    super("Spotify API returned 403 Forbidden");
-    this.name = "SpotifyForbiddenError";
-  }
-}
+import type { SpotifyTokens, SpotifyTrack, FallbackTrack } from "@/types";
 
 const SPOTIFY_SCOPES = [
   "playlist-modify-public",
@@ -87,8 +80,7 @@ export async function exchangeCodeForTokens(code: string): Promise<SpotifyTokens
   });
 
   if (!res.ok) {
-    const err = await res.json();
-    throw new Error(`Token exchange failed: ${err.error_description ?? err.error}`);
+    throw new Error("Spotify connection failed");
   }
 
   const data = await res.json();
@@ -194,7 +186,6 @@ export async function addTracksToSpotifyPlaylist(
   playlistId: string,
   trackUris: string[]
 ): Promise<void> {
-  // Spotify allows 100 tracks per request
   const chunks: string[][] = [];
   for (let i = 0; i < trackUris.length; i += 100) {
     chunks.push(trackUris.slice(i, i + 100));
@@ -206,54 +197,94 @@ export async function addTracksToSpotifyPlaylist(
       body: JSON.stringify({ playlistId, accessToken, uris: chunk }),
     });
     if (!res.ok) {
-      const err = await res.text();
-      if (res.status === 403) throw new SpotifyForbiddenError();
-      throw new Error(`Spotify API /playlists/${playlistId}/tracks → ${res.status}: ${err}`);
+      throw new Error(`Failed to add tracks (${res.status})`);
     }
   }
 }
+
+// ─── Orchestration ───────────────────────────────────────────────────────────
 
 export async function buildSpotifyPlaylist(params: {
   accessToken: string;
   artistNames: string[];
   playlistName: string;
   onProgress?: (msg: string) => void;
-}): Promise<{ playlistId: string; trackCount: number; url: string; manualTracks?: SpotifyTrack[] }> {
+}): Promise<{
+  playlistId: string | null;
+  trackCount: number;
+  url: string | null;
+  fallbackTracks?: FallbackTrack[];
+}> {
   const { accessToken, artistNames, playlistName, onProgress } = params;
 
-  onProgress?.("Getting your Spotify profile…");
-  const userId = await getSpotifyUserId(accessToken);
+  let playlistId: string | null = null;
+  let url: string | null = null;
 
-  onProgress?.("Creating playlist…");
-  const playlistId = await createSpotifyPlaylist(accessToken, userId, playlistName);
+  // Step 1: get user profile
+  let userId: string | null = null;
+  try {
+    onProgress?.("Getting your Spotify profile…");
+    userId = await getSpotifyUserId(accessToken);
+  } catch {
+    // Auth or network failure — still attempt track search below
+  }
 
+  // Step 2: create playlist (requires valid userId)
+  if (userId) {
+    try {
+      onProgress?.("Creating playlist…");
+      playlistId = await createSpotifyPlaylist(accessToken, userId, playlistName);
+      url = `https://open.spotify.com/playlist/${playlistId}`;
+    } catch {
+      // Fall through — still search for tracks
+    }
+  }
+
+  // Step 3: search for tracks (keep full SpotifyTrack internally for URI-based adding)
   const allTracks: SpotifyTrack[] = [];
-  const batch = artistNames.slice(0, 20); // cap at 20 artists
-
+  const batch = artistNames.slice(0, 20);
   for (const artist of batch) {
     onProgress?.(`Finding tracks for ${artist}…`);
     try {
       const tracks = await searchSpotifyTracks(accessToken, artist);
       allTracks.push(...tracks);
-    } catch (err) {
-      console.warn(`Could not find tracks for ${artist}:`, err);
+    } catch {
+      // Skip this artist
     }
   }
 
-  const url = `https://open.spotify.com/playlist/${playlistId}`;
-
-  if (allTracks.length > 0) {
+  // Step 4: add tracks to playlist
+  if (playlistId && allTracks.length > 0) {
     onProgress?.(`Adding ${allTracks.length} tracks to playlist…`);
     try {
       await addTracksToSpotifyPlaylist(accessToken, playlistId, allTracks.map((t) => t.uri));
       return { playlistId, trackCount: allTracks.length, url };
-    } catch (err) {
-      if (err instanceof SpotifyForbiddenError) {
-        return { playlistId, trackCount: 0, url, manualTracks: allTracks };
-      }
-      throw err;
+    } catch {
+      // Couldn't add tracks — surface them as a fallback list
+      return {
+        playlistId,
+        url,
+        trackCount: 0,
+        fallbackTracks: allTracks.map((t) => ({ name: t.name, artistName: t.artistName })),
+      };
     }
   }
 
-  return { playlistId, trackCount: 0, url };
+  // Tracks found but no playlist (auth partially worked)
+  if (allTracks.length > 0) {
+    return {
+      playlistId: null,
+      url: null,
+      trackCount: 0,
+      fallbackTracks: allTracks.map((t) => ({ name: t.name, artistName: t.artistName })),
+    };
+  }
+
+  // No tracks — either empty playlist was created or total failure
+  return {
+    playlistId,
+    url,
+    trackCount: 0,
+    fallbackTracks: playlistId ? undefined : [],
+  };
 }

@@ -54,13 +54,18 @@ export interface SpotifyTrack {
   artistName: string;
 }
 
-export interface PlaylistResult {
-  id: string;
+export interface FallbackTrack {
   name: string;
-  url: string;
+  artistName: string;
+}
+
+export interface PlaylistResult {
+  id: string | null;
+  name: string;
+  url: string | null;
   trackCount: number;
   service: MusicService;
-  manualTracks?: SpotifyTrack[]; // present when tracks couldn't be added due to API restriction
+  fallbackTracks?: FallbackTrack[]; // present when any part of playlist creation fails
 }
 
 export type PlaylistStep =

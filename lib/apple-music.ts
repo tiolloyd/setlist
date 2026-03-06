@@ -3,11 +3,20 @@
  * The developer token is fetched server-side from /api/apple-music-token.
  */
 
+import type { FallbackTrack } from "@/types";
+
 declare global {
   interface Window {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     MusicKit: any;
   }
+}
+
+interface AppleMusicTrack {
+  id: string;
+  type: string;
+  name: string;
+  artistName: string;
 }
 
 let musicKitLoaded = false;
@@ -69,7 +78,7 @@ export async function searchAppleMusicTracks(
   musicInstance: unknown,
   artistName: string,
   limit = 5
-): Promise<Array<{ id: string; type: string }>> {
+): Promise<AppleMusicTrack[]> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const music = musicInstance as any;
   const storefront = music.storefrontId ?? "us";
@@ -81,8 +90,15 @@ export async function searchAppleMusicTracks(
   });
 
   const result = await music.api.music(`/v1/catalog/${storefront}/search?${params}`);
-  const songs = result?.data?.results?.songs?.data ?? [];
-  return songs.map((s: { id: string }) => ({ id: s.id, type: "songs" })) as Array<{ id: string; type: string }>;
+  const songs: Array<{ id: string; attributes?: { name?: string; artistName?: string } }> =
+    result?.data?.results?.songs?.data ?? [];
+
+  return songs.map((s) => ({
+    id: s.id,
+    type: "songs",
+    name: s.attributes?.name ?? "",
+    artistName: s.attributes?.artistName ?? artistName,
+  }));
 }
 
 export async function createAppleMusicPlaylist(
@@ -128,47 +144,90 @@ export async function addTracksToAppleMusicPlaylist(
   }
 }
 
+// ─── Orchestration ───────────────────────────────────────────────────────────
+
 export async function buildAppleMusicPlaylist(params: {
   artistNames: string[];
   playlistName: string;
   onProgress?: (msg: string) => void;
-}): Promise<{ playlistId: string; trackCount: number }> {
+}): Promise<{
+  playlistId: string | null;
+  trackCount: number;
+  fallbackTracks?: FallbackTrack[];
+}> {
   const { artistNames, playlistName, onProgress } = params;
 
-  onProgress?.("Loading MusicKit JS…");
-  await loadMusicKit();
+  // Steps 1–4: load SDK and authorize — if anything fails here we have no music instance
+  let music: unknown = null;
+  try {
+    onProgress?.("Loading MusicKit JS…");
+    await loadMusicKit();
 
-  onProgress?.("Fetching developer token…");
-  const developerToken = await getDeveloperToken();
+    onProgress?.("Fetching developer token…");
+    const developerToken = await getDeveloperToken();
 
-  onProgress?.("Configuring Apple Music…");
-  await configureMusicKit(developerToken);
+    onProgress?.("Configuring Apple Music…");
+    await configureMusicKit(developerToken);
 
-  onProgress?.("Authorizing with Apple Music…");
-  await authorizeMusicKit();
+    onProgress?.("Authorizing with Apple Music…");
+    await authorizeMusicKit();
 
-  const music = window.MusicKit.getInstance();
+    music = window.MusicKit.getInstance();
+  } catch {
+    // Auth/setup failed — no tracks available
+    return { playlistId: null, trackCount: 0, fallbackTracks: [] };
+  }
 
-  onProgress?.("Creating playlist…");
-  const playlistId = await createAppleMusicPlaylist(music, playlistName);
+  // Step 5: create playlist
+  let playlistId: string | null = null;
+  try {
+    onProgress?.("Creating playlist…");
+    playlistId = await createAppleMusicPlaylist(music, playlistName);
+  } catch {
+    // Fall through — still search for tracks
+  }
 
-  const allTracks: Array<{ id: string; type: string }> = [];
+  // Step 6: search for tracks
+  const allTracks: AppleMusicTrack[] = [];
   const batch = artistNames.slice(0, 20);
-
   for (const artist of batch) {
     onProgress?.(`Finding tracks for ${artist}…`);
     try {
       const tracks = await searchAppleMusicTracks(music, artist);
       allTracks.push(...tracks);
-    } catch (err) {
-      console.warn(`Could not find tracks for ${artist}:`, err);
+    } catch {
+      // Skip this artist
     }
   }
 
-  if (allTracks.length > 0) {
+  // Step 7: add tracks to playlist
+  if (playlistId && allTracks.length > 0) {
     onProgress?.(`Adding ${allTracks.length} tracks to playlist…`);
-    await addTracksToAppleMusicPlaylist(music, playlistId, allTracks);
+    try {
+      await addTracksToAppleMusicPlaylist(music, playlistId, allTracks);
+      return { playlistId, trackCount: allTracks.length };
+    } catch {
+      return {
+        playlistId,
+        trackCount: 0,
+        fallbackTracks: allTracks.map((t) => ({ name: t.name, artistName: t.artistName })),
+      };
+    }
   }
 
-  return { playlistId, trackCount: allTracks.length };
+  // Tracks found but no playlist
+  if (allTracks.length > 0) {
+    return {
+      playlistId: null,
+      trackCount: 0,
+      fallbackTracks: allTracks.map((t) => ({ name: t.name, artistName: t.artistName })),
+    };
+  }
+
+  // No tracks — empty playlist or total failure
+  return {
+    playlistId,
+    trackCount: 0,
+    fallbackTracks: playlistId ? undefined : [],
+  };
 }

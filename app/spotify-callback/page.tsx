@@ -2,7 +2,7 @@
 
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Loader2, CheckCircle2, XCircle } from "lucide-react";
+import { Loader2, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { exchangeCodeForTokens } from "@/lib/spotify";
 
@@ -10,24 +10,12 @@ function SpotifyCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
-  const [errorMsg, setErrorMsg] = useState("");
 
   useEffect(() => {
     const code = searchParams.get("code");
     const error = searchParams.get("error");
 
-    if (error) {
-      setErrorMsg(
-        error === "access_denied"
-          ? "You denied access to Spotify. Please try again and approve the request."
-          : `Spotify returned an error: ${error}`
-      );
-      setStatus("error");
-      return;
-    }
-
-    if (!code) {
-      setErrorMsg("No authorization code received from Spotify.");
+    if (error || !code) {
       setStatus("error");
       return;
     }
@@ -43,10 +31,7 @@ function SpotifyCallbackContent() {
           router.push(returnTo);
         }, 1500);
       })
-      .catch((err: unknown) => {
-        setErrorMsg(
-          err instanceof Error ? err.message : "Token exchange failed"
-        );
+      .catch(() => {
         setStatus("error");
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -76,12 +61,26 @@ function SpotifyCallbackContent() {
 
       {status === "error" && (
         <div className="space-y-4">
-          <XCircle className="h-10 w-10 text-brand-red mx-auto" />
-          <p className="text-lg font-medium">Spotify connection failed</p>
-          <p className="text-sm text-brand-red bg-brand-gray border border-brand-red px-4 py-2 rounded-sm">
-            {errorMsg}
+          <p className="text-lg font-medium">Couldn&apos;t connect to Spotify</p>
+          <p className="text-sm text-muted-foreground">
+            Something went wrong with the Spotify connection. You can still browse
+            your concert results and try again.
           </p>
-          <Button onClick={() => router.push("/")}>Go back home</Button>
+          <div className="flex flex-col gap-2">
+            <Button
+              onClick={() => {
+                const returnTo = sessionStorage.getItem("spotify_return_to") ?? "/results";
+                sessionStorage.removeItem("spotify_return_to");
+                sessionStorage.removeItem("spotify_pending_build");
+                router.push(returnTo);
+              }}
+            >
+              Back to results
+            </Button>
+            <Button variant="outline" onClick={() => router.push("/")}>
+              Go home
+            </Button>
+          </div>
         </div>
       )}
     </div>

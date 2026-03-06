@@ -40,6 +40,29 @@ function StepIndicator({
   );
 }
 
+function getFallbackUrl(service: MusicService, trackName: string, artistName: string): string {
+  const q = encodeURIComponent(`${trackName} ${artistName}`.trim());
+  switch (service) {
+    case "spotify":
+      return `https://open.spotify.com/search/${q}`;
+    case "apple-music":
+      return `https://music.apple.com/search?term=${q}`;
+    default:
+      return "#";
+  }
+}
+
+function getServiceHomeUrl(service: MusicService): string {
+  switch (service) {
+    case "spotify":
+      return "https://open.spotify.com";
+    case "apple-music":
+      return "https://music.apple.com";
+    default:
+      return "#";
+  }
+}
+
 export function PlaylistBuilder({ service, artists }: PlaylistBuilderProps) {
   const [step, setStep] = useState<PlaylistStep>("idle");
   const [progress, setProgress] = useState("");
@@ -69,11 +92,18 @@ export function PlaylistBuilder({ service, artists }: PlaylistBuilderProps) {
   const playlistName = `Concerts Near Me – ${format(new Date(), "MMMM yyyy")}`;
   const artistNames = artists.map((a) => a.name);
 
+  const serviceLabel =
+    service === "spotify"
+      ? "Spotify"
+      : service === "apple-music"
+      ? "Apple Music"
+      : "Qobuz";
+
   async function startSpotifyBuild(accessToken: string) {
     setStep("searching-tracks");
     setError(null);
     try {
-      const { playlistId, trackCount, url, manualTracks } = await buildSpotifyPlaylist({
+      const { playlistId, trackCount, url, fallbackTracks } = await buildSpotifyPlaylist({
         accessToken,
         artistNames,
         playlistName,
@@ -85,12 +115,21 @@ export function PlaylistBuilder({ service, artists }: PlaylistBuilderProps) {
         url,
         trackCount,
         service: "spotify",
-        manualTracks,
+        fallbackTracks,
       });
       setStep("done");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Playlist creation failed");
-      setStep("error");
+      // Safety net — buildSpotifyPlaylist should never throw, but handle it anyway
+      console.error("Unexpected Spotify build error:", err);
+      setResult({
+        id: null,
+        name: playlistName,
+        url: null,
+        trackCount: 0,
+        service: "spotify",
+        fallbackTracks: [],
+      });
+      setStep("done");
     }
   }
 
@@ -102,7 +141,6 @@ export function PlaylistBuilder({ service, artists }: PlaylistBuilderProps) {
     }
     // Mark that we want to build after auth completes
     sessionStorage.setItem("spotify_pending_build", "true");
-    // Store artist names so the callback page can restore context
     sessionStorage.setItem(
       "spotify_pending_artists",
       JSON.stringify(artistNames)
@@ -111,9 +149,17 @@ export function PlaylistBuilder({ service, artists }: PlaylistBuilderProps) {
     setStep("authenticating");
     try {
       await initiateSpotifyAuth(); // redirects away
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Auth failed");
-      setStep("error");
+    } catch {
+      // Auth redirect failed — show empty fallback
+      setResult({
+        id: null,
+        name: playlistName,
+        url: null,
+        trackCount: 0,
+        service: "spotify",
+        fallbackTracks: [],
+      });
+      setStep("done");
     }
   }
 
@@ -121,7 +167,7 @@ export function PlaylistBuilder({ service, artists }: PlaylistBuilderProps) {
     setStep("authenticating");
     setError(null);
     try {
-      const { playlistId, trackCount } = await buildAppleMusicPlaylist({
+      const { playlistId, trackCount, fallbackTracks } = await buildAppleMusicPlaylist({
         artistNames,
         playlistName,
         onProgress: (msg) => {
@@ -135,62 +181,72 @@ export function PlaylistBuilder({ service, artists }: PlaylistBuilderProps) {
       setResult({
         id: playlistId,
         name: playlistName,
-        url: `https://music.apple.com/library/playlist/${playlistId}`,
+        url: playlistId ? `https://music.apple.com/library/playlist/${playlistId}` : null,
         trackCount,
         service: "apple-music",
+        fallbackTracks,
       });
       setStep("done");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Playlist creation failed");
-      setStep("error");
+      // Safety net — buildAppleMusicPlaylist should never throw, but handle it anyway
+      console.error("Unexpected Apple Music build error:", err);
+      setResult({
+        id: null,
+        name: playlistName,
+        url: null,
+        trackCount: 0,
+        service: "apple-music",
+        fallbackTracks: [],
+      });
+      setStep("done");
     }
   }
 
-  const serviceLabel =
-    service === "spotify" ? "Spotify" : service === "apple-music" ? "Apple Music" : "Qobuz";
-
   if (result) {
-    // Fallback: playlist created but tracks couldn't be added automatically
-    if (result.manualTracks) {
+    // Fallback: any failure during playlist creation — show track search links
+    if (result.fallbackTracks !== undefined) {
+      const serviceUrl = result.url ?? getServiceHomeUrl(service);
       return (
         <div className="space-y-4">
           <a
-            href={result.url ?? "https://open.spotify.com"}
+            href={serviceUrl}
             target="_blank"
             rel="noopener noreferrer"
             className="btn-primary flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold w-full"
           >
-            Open Spotify
+            Open {serviceLabel}
             <ExternalLink className="h-4 w-4" />
           </a>
 
           <p className="text-xs text-muted-foreground leading-relaxed">
-            We&apos;re still working on full Spotify connectivity — here are your concert
-            playlist tracks in the meantime.
+            We&apos;re still setting up full {serviceLabel} connectivity — here are your
+            concert playlist tracks in the meantime.
           </p>
 
-          <div className="border border-brand-gray-light divide-y divide-brand-gray-light max-h-72 overflow-y-auto">
-            {result.manualTracks.map((track) => (
-              <a
-                key={track.uri}
-                href={`https://open.spotify.com/track/${track.uri.replace("spotify:track:", "")}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex items-center justify-between px-3 py-2.5 gap-3 hover:bg-brand-gray-light/30 transition-colors group"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-brand-white truncate">{track.name}</p>
-                  <p className="text-xs text-muted-foreground truncate">{track.artistName}</p>
-                </div>
-                <ExternalLink className="h-3.5 w-3.5 text-brand-gray-light group-hover:text-brand-red transition-colors shrink-0" />
-              </a>
-            ))}
-          </div>
+          {result.fallbackTracks.length > 0 && (
+            <div className="border border-brand-gray-light divide-y divide-brand-gray-light max-h-72 overflow-y-auto">
+              {result.fallbackTracks.map((track, i) => (
+                <a
+                  key={i}
+                  href={getFallbackUrl(service, track.name, track.artistName)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between px-3 py-2.5 gap-3 hover:bg-brand-gray-light/30 transition-colors group"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-brand-white truncate">{track.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{track.artistName}</p>
+                  </div>
+                  <ExternalLink className="h-3.5 w-3.5 text-brand-gray-light group-hover:text-brand-red transition-colors shrink-0" />
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       );
     }
 
-    // Happy path: tracks were added successfully
+    // Happy path: playlist created and tracks added successfully
     return (
       <Card className="border-green-700 bg-green-950">
         <CardContent className="p-6">
@@ -202,15 +258,17 @@ export function PlaylistBuilder({ service, artists }: PlaylistBuilderProps) {
                 Added <strong>{result.trackCount} tracks</strong> to &quot;
                 {result.name}&quot; on {serviceLabel}.
               </p>
-              <a
-                href={result.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 text-sm font-medium text-green-400 underline hover:text-green-300"
-              >
-                Open playlist
-                <ExternalLink className="h-3.5 w-3.5" />
-              </a>
+              {result.url && (
+                <a
+                  href={result.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-sm font-medium text-green-400 underline hover:text-green-300"
+                >
+                  Open playlist
+                  <ExternalLink className="h-3.5 w-3.5" />
+                </a>
+              )}
             </div>
           </div>
         </CardContent>
@@ -282,18 +340,19 @@ export function PlaylistBuilder({ service, artists }: PlaylistBuilderProps) {
         </Card>
       )}
 
+      {/* Safety-net error state — should rarely appear with graceful library functions */}
       {step === "error" && (
         <div className="space-y-3">
           <p className="text-xs text-muted-foreground leading-relaxed">
-            We&apos;re still working on full Spotify connectivity. Try connecting again below.
+            We&apos;re still setting up {serviceLabel} connectivity. Try connecting again below.
           </p>
           <a
-            href="https://open.spotify.com"
+            href={getServiceHomeUrl(service)}
             target="_blank"
             rel="noopener noreferrer"
             className="btn-secondary flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-bold w-full"
           >
-            Open Spotify
+            Open {serviceLabel}
             <ExternalLink className="h-4 w-4" />
           </a>
           <Button
