@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -69,27 +70,52 @@ export function PlaylistBuilder({ service, artists }: PlaylistBuilderProps) {
   const [result, setResult] = useState<PlaylistResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [hasSpotifyToken, setHasSpotifyToken] = useState(false);
+  const searchParams = useSearchParams();
 
-  // Check if we already have a Spotify token (e.g. returned from OAuth callback)
+  const playlistName = `Concerts Near Me – ${format(new Date(), "MMMM yyyy")}`;
+
+  // Check for auth error redirect from Spotify callback, or for a valid token to auto-start
   useEffect(() => {
-    if (service === "spotify") {
-      const tokens = getStoredTokens();
-      setHasSpotifyToken(!!tokens);
+    if (service !== "spotify") return;
 
-      // If tokens are present and step is still idle, that means we just returned
-      // from OAuth — auto-start the playlist build
-      if (tokens) {
-        const pendingBuild = sessionStorage.getItem("spotify_pending_build");
-        if (pendingBuild === "true") {
-          sessionStorage.removeItem("spotify_pending_build");
-          void startSpotifyBuild(tokens.accessToken);
-        }
+    // If the callback redirected back with an error, show the fallback immediately
+    if (searchParams.get("playlist_error") === "true") {
+      // Clean the param from the URL without adding a history entry
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("playlist_error");
+        window.history.replaceState({}, "", url.pathname + url.search);
+      } catch {
+        // ignore
+      }
+      setResult({
+        id: null,
+        name: playlistName,
+        url: null,
+        trackCount: 0,
+        service: "spotify",
+        fallbackTracks: artists.slice(0, 20).map((a) => ({ name: a.name, artistName: "" })),
+      });
+      setStep("done");
+      return;
+    }
+
+    // Check if we already have a Spotify token (e.g. returned from OAuth callback)
+    const tokens = getStoredTokens();
+    setHasSpotifyToken(!!tokens);
+
+    // If tokens are present and step is still idle, that means we just returned
+    // from OAuth — auto-start the playlist build
+    if (tokens) {
+      const pendingBuild = sessionStorage.getItem("spotify_pending_build");
+      if (pendingBuild === "true") {
+        sessionStorage.removeItem("spotify_pending_build");
+        void startSpotifyBuild(tokens.accessToken);
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [service]);
 
-  const playlistName = `Concerts Near Me – ${format(new Date(), "MMMM yyyy")}`;
   const artistNames = artists.map((a) => a.name);
 
   const serviceLabel =

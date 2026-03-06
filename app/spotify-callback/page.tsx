@@ -3,37 +3,51 @@
 import { useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Loader2, CheckCircle2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { exchangeCodeForTokens } from "@/lib/spotify";
+
+function redirectWithError(router: ReturnType<typeof useRouter>) {
+  try {
+    sessionStorage.removeItem("spotify_pending_build");
+    const returnTo = sessionStorage.getItem("spotify_return_to") ?? "/results";
+    sessionStorage.removeItem("spotify_return_to");
+    const url = new URL(returnTo, window.location.origin);
+    url.searchParams.set("playlist_error", "true");
+    router.replace(url.pathname + url.search);
+  } catch {
+    router.replace("/results?playlist_error=true");
+  }
+}
 
 function SpotifyCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const [status, setStatus] = useState<"loading" | "success" | "error">("loading");
+  const [status, setStatus] = useState<"loading" | "success">("loading");
 
   useEffect(() => {
-    const code = searchParams.get("code");
-    const error = searchParams.get("error");
+    try {
+      const code = searchParams.get("code");
+      const error = searchParams.get("error");
 
-    if (error || !code) {
-      setStatus("error");
-      return;
+      if (error || !code) {
+        redirectWithError(router);
+        return;
+      }
+
+      exchangeCodeForTokens(code)
+        .then(() => {
+          setStatus("success");
+          setTimeout(() => {
+            const returnTo = sessionStorage.getItem("spotify_return_to") ?? "/";
+            sessionStorage.removeItem("spotify_return_to");
+            router.push(returnTo);
+          }, 1500);
+        })
+        .catch(() => {
+          redirectWithError(router);
+        });
+    } catch {
+      redirectWithError(router);
     }
-
-    exchangeCodeForTokens(code)
-      .then(() => {
-        setStatus("success");
-        // Navigate back to results after a short delay
-        setTimeout(() => {
-          // Try to return to results page if we have a stored URL
-          const returnTo = sessionStorage.getItem("spotify_return_to") ?? "/";
-          sessionStorage.removeItem("spotify_return_to");
-          router.push(returnTo);
-        }, 1500);
-      })
-      .catch(() => {
-        setStatus("error");
-      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -56,31 +70,6 @@ function SpotifyCallbackContent() {
           <p className="text-muted-foreground text-sm">
             Returning to your results…
           </p>
-        </div>
-      )}
-
-      {status === "error" && (
-        <div className="space-y-4">
-          <p className="text-lg font-medium">Couldn&apos;t connect to Spotify</p>
-          <p className="text-sm text-muted-foreground">
-            Something went wrong with the Spotify connection. You can still browse
-            your concert results and try again.
-          </p>
-          <div className="flex flex-col gap-2">
-            <Button
-              onClick={() => {
-                const returnTo = sessionStorage.getItem("spotify_return_to") ?? "/results";
-                sessionStorage.removeItem("spotify_return_to");
-                sessionStorage.removeItem("spotify_pending_build");
-                router.push(returnTo);
-              }}
-            >
-              Back to results
-            </Button>
-            <Button variant="outline" onClick={() => router.push("/")}>
-              Go home
-            </Button>
-          </div>
         </div>
       )}
     </div>
