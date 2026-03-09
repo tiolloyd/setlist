@@ -41,8 +41,10 @@ function base64urlEncode(buffer: ArrayBuffer): string {
 
 // ─── Auth Flow ───────────────────────────────────────────────────────────────
 
+const SPOTIFY_CLIENT_ID = "c33905e814f449658b285bfb7430bb08";
+
 export async function initiateSpotifyAuth(): Promise<void> {
-  const clientId = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID;
+  const clientId = process.env.NEXT_PUBLIC_SPOTIFY_CLIENT_ID ?? SPOTIFY_CLIENT_ID;
   const redirectUri = process.env.NEXT_PUBLIC_SPOTIFY_REDIRECT_URI ?? `${window.location.origin}/spotify-callback`;
 
   if (!clientId) {
