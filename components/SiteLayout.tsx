@@ -21,7 +21,7 @@ export function SiteLayout({ children }: { children: React.ReactNode }) {
       <main>{children}</main>
       {!isLanding && (
         <footer className="border-t border-brand-gray-light bg-brand-gray mt-16">
-          <div className="container mx-auto px-4 py-6 text-center text-sm text-muted-foreground">
+          <div className="container mx-auto px-4 py-6 text-center text-sm text-muted-foreground space-y-2">
             <p>
               Concert data via{" "}
               <a
@@ -33,6 +33,15 @@ export function SiteLayout({ children }: { children: React.ReactNode }) {
                 Ticketmaster
               </a>{" "}
               · Built with Next.js
+            </p>
+            <p>
+              <Link href="/privacy" className="underline hover:text-brand-white">
+                Privacy Policy
+              </Link>
+              {" · "}
+              <Link href="/terms" className="underline hover:text-brand-white">
+                Terms of Service
+              </Link>
             </p>
           </div>
         </footer>
