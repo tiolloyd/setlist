@@ -16,10 +16,11 @@ export function getSupabase(): SupabaseClient | null {
 export function getSessionId(): string {
   if (typeof window === "undefined") return "";
   const key = "setlist_session_id";
-  let id = localStorage.getItem(key);
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem(key, id);
+  const existing = localStorage.getItem(key);
+  if (!existing) {
+    const newId = crypto.randomUUID();
+    localStorage.setItem(key, newId);
+    return newId;
   }
-  return id;
+  return existing;
 }

@@ -82,14 +82,14 @@ export function ConcertList({ artists }: ConcertListProps) {
             artist_id: artist.id,
             artist_name: artist.name,
             genre: artist.genreIds[0] ?? null,
-            sub_genre: artist.subGenreIds[0] ?? null,
+            subgenre: artist.subGenreIds[0] ?? null,
             preference: next,
           },
           { onConflict: "session_id,artist_id" }
         );
       }
     } catch {
-      // Silent failure — revert optimistic update
+      // Revert optimistic update
       setPreferences((prev) => {
         const map = new Map(prev);
         if (current === undefined) map.delete(artist.id);
