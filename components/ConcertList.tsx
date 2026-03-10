@@ -7,7 +7,9 @@ import { Calendar, MapPin, Music2, ThumbsUp, ThumbsDown } from "lucide-react";
 import { format, parseISO } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { ArtistWithConcerts } from "@/lib/ticketmaster";
-import { getSupabase, getSessionId } from "@/lib/supabase";
+import { getSupabase, getPreferenceOwnerId } from "@/lib/supabase";
+import { useAuth } from "@/contexts/AuthContext";
+import { AuthModal } from "@/components/AuthModal";
 
 interface ConcertListProps {
   artists: ArtistWithConcerts[];
@@ -15,6 +17,8 @@ interface ConcertListProps {
 }
 
 type Preference = "like" | "dislike";
+
+const BANNER_DISMISSED_KEY = "setlist_auth_banner_dismissed";
 
 function formatDate(dateStr: string): string {
   try {
@@ -25,20 +29,32 @@ function formatDate(dateStr: string): string {
 }
 
 export function ConcertList({ artists, onPreferenceChange }: ConcertListProps) {
+  const { user } = useAuth();
   const [preferences, setPreferences] = useState<Map<string, Preference>>(new Map());
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
+  // Whether the user has interacted with at least one preference button this session
+  const [hasInteracted, setHasInteracted] = useState(false);
+  // Whether the auth prompt banner has been dismissed
+  const [bannerDismissed, setBannerDismissed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    return sessionStorage.getItem(BANNER_DISMISSED_KEY) === "1";
+  });
+  const [authModalOpen, setAuthModalOpen] = useState(false);
 
-  // Load saved preferences for this session on mount
+  // Show the banner when: user has interacted, is not logged in, and hasn't dismissed
+  const showBanner = hasInteracted && !user && !bannerDismissed;
+
+  // Load saved preferences for this session/user on mount
   useEffect(() => {
-    const sessionId = getSessionId();
-    if (!sessionId) return;
+    const ownerId = getPreferenceOwnerId(user?.id);
+    if (!ownerId) return;
 
     const db = getSupabase();
     if (!db) return;
 
     db.from("user_artist_preferences")
       .select("artist_id, preference")
-      .eq("session_id", sessionId)
+      .eq("session_id", ownerId)
       .then(({ data }) => {
         if (!data) return;
         const map = new Map<string, Preference>();
@@ -49,12 +65,17 @@ export function ConcertList({ artists, onPreferenceChange }: ConcertListProps) {
         }
         setPreferences(map);
       });
-  }, []);
+  }, [user?.id]);
 
   async function handlePreference(artist: ArtistWithConcerts, value: Preference) {
-    const sessionId = getSessionId();
+    const ownerId = getPreferenceOwnerId(user?.id);
     const db = getSupabase();
-    if (!sessionId || !db || loadingIds.has(artist.id)) return;
+    if (!ownerId || !db || loadingIds.has(artist.id)) return;
+
+    // Show auth banner after first interaction if not logged in
+    if (!hasInteracted) {
+      setHasInteracted(true);
+    }
 
     const current = preferences.get(artist.id);
     // Clicking the active button toggles it off; otherwise switch to the new value
@@ -77,12 +98,12 @@ export function ConcertList({ artists, onPreferenceChange }: ConcertListProps) {
         await db
           .from("user_artist_preferences")
           .delete()
-          .eq("session_id", sessionId)
+          .eq("session_id", ownerId)
           .eq("artist_id", artist.id);
       } else {
         await db.from("user_artist_preferences").upsert(
           {
-            session_id: sessionId,
+            session_id: ownerId,
             artist_id: artist.id,
             artist_name: artist.name,
             genre: artist.genreIds[0] ?? null,
@@ -107,6 +128,11 @@ export function ConcertList({ artists, onPreferenceChange }: ConcertListProps) {
         return s;
       });
     }
+  }
+
+  function handleDismissBanner() {
+    sessionStorage.setItem(BANNER_DISMISSED_KEY, "1");
+    setBannerDismissed(true);
   }
 
   if (artists.length === 0) {
@@ -239,6 +265,35 @@ export function ConcertList({ artists, onPreferenceChange }: ConcertListProps) {
           );
         })}
       </div>
+
+      {/* Auth prompt banner — shown once after first preference interaction */}
+      {showBanner && (
+        <div className="border border-[#2a2a2a] bg-[#1a1a1a] px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3 rounded-[0.125rem]">
+          <p className="text-sm text-[#F5F5F5] flex-1">
+            Save your music preferences across devices — sign in or create a free account
+          </p>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => setAuthModalOpen(true)}
+              className="px-3 py-1.5 bg-brand-red text-white text-xs font-semibold uppercase tracking-wide rounded-[0.125rem] hover:bg-[#990000] transition-colors"
+            >
+              Sign Up
+            </button>
+            <button
+              onClick={handleDismissBanner}
+              className="px-3 py-1.5 text-xs text-[#8c8c8c] hover:text-[#F5F5F5] transition-colors"
+            >
+              Maybe Later
+            </button>
+          </div>
+        </div>
+      )}
+
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        initialTab="sign-up"
+      />
     </div>
   );
 }
