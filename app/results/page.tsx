@@ -38,6 +38,8 @@ function ResultsContent() {
   const [loading, setLoading] = useState(!hasContextData);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const [dislikedIds, setDislikedIds] = useState<Set<string>>(new Set());
+  // Set to true after a param-restore router.replace, so the second effect knows to load
+  const [paramsRestored, setParamsRestored] = useState(false);
 
   function handlePreferenceChange(artistId: string, preference: string | undefined) {
     setDislikedIds((prev) => {
@@ -50,8 +52,16 @@ function ResultsContent() {
 
   async function loadConcerts() {
     if (isNaN(lat) || isNaN(lng) || !startDate || !endDate) {
-      setFetchError("Invalid search parameters. Please go back and try again.");
-      setLoading(false);
+      // Params are missing — check sessionStorage for a backup saved before Spotify OAuth
+      const savedSearch = sessionStorage.getItem("spotify_saved_search_params");
+      if (savedSearch) {
+        sessionStorage.removeItem("spotify_saved_search_params");
+        router.replace(`/results${savedSearch}`);
+        setParamsRestored(true);
+        return;
+      }
+      // Nothing to restore — send the user back to search
+      router.replace("/search");
       return;
     }
 
@@ -88,6 +98,15 @@ function ResultsContent() {
     void loadConcerts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // After a param-restore router.replace, wait for searchParams to update
+  // then re-trigger the fetch with the now-valid lat/lng/dates
+  useEffect(() => {
+    if (!paramsRestored) return;
+    if (isNaN(lat) || isNaN(lng) || !startDate || !endDate) return;
+    void loadConcerts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramsRestored, lat, lng, startDate, endDate]);
 
   // Apply genre filter if any IDs are selected; otherwise show everything
   const artists = useMemo(() => {
@@ -203,7 +222,13 @@ function ResultsContent() {
                 <Button
                   size="sm"
                   variant="outline"
-                  onClick={loadConcerts}
+                  onClick={() => {
+                    if (isNaN(lat) || isNaN(lng) || !startDate || !endDate) {
+                      router.replace("/search");
+                      return;
+                    }
+                    void loadConcerts();
+                  }}
                   className="gap-2"
                 >
                   <RefreshCw className="h-4 w-4" />

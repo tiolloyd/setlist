@@ -172,6 +172,9 @@ export function PlaylistBuilder({ service, artists }: PlaylistBuilderProps) {
       JSON.stringify(artistNames)
     );
     sessionStorage.setItem("spotify_return_to", window.location.pathname + window.location.search);
+    // Explicit backup of just the search params so /results can restore them
+    // if the URL is lost on the way back from Spotify OAuth
+    sessionStorage.setItem("spotify_saved_search_params", window.location.search);
     setStep("authenticating");
     try {
       await initiateSpotifyAuth(); // redirects away
