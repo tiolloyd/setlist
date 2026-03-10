@@ -29,7 +29,7 @@ function formatDate(dateStr: string): string {
 }
 
 export function ConcertList({ artists, onPreferenceChange }: ConcertListProps) {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [preferences, setPreferences] = useState<Map<string, Preference>>(new Map());
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
   // Whether the user has interacted with at least one preference button this session
@@ -44,8 +44,12 @@ export function ConcertList({ artists, onPreferenceChange }: ConcertListProps) {
   // Show the banner when: user has interacted, is not logged in, and hasn't dismissed
   const showBanner = hasInteracted && !user && !bannerDismissed;
 
-  // Load saved preferences for this session/user on mount
+  // Load saved preferences once auth state is known
   useEffect(() => {
+    // Wait until Supabase auth has resolved — avoids fetching by anonymous
+    // session_id when the user is actually logged in
+    if (authLoading) return;
+
     const ownerId = getPreferenceOwnerId(user?.id);
     if (!ownerId) return;
 
@@ -65,7 +69,7 @@ export function ConcertList({ artists, onPreferenceChange }: ConcertListProps) {
         }
         setPreferences(map);
       });
-  }, [user?.id]);
+  }, [authLoading, user?.id]);
 
   async function handlePreference(artist: ArtistWithConcerts, value: Preference) {
     const ownerId = getPreferenceOwnerId(user?.id);
