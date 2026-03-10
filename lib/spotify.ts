@@ -196,24 +196,56 @@ export async function createSpotifyPlaylist(
   return data.id;
 }
 
+async function runSpotifyTrackQuery(
+  accessToken: string,
+  q: string,
+  limit: number,
+  fallbackArtistName: string
+): Promise<SpotifyTrack[]> {
+  const params = new URLSearchParams({ q, type: "track", limit: String(limit) });
+  const res = await spotifyFetch(`/search?${params}`, accessToken);
+  const data = await res.json();
+  const items: Array<{ uri: string; name: string; artists: Array<{ name: string }> }> =
+    data.tracks?.items ?? [];
+  return items.map((t) => ({
+    uri: t.uri,
+    name: t.name,
+    artistName: t.artists?.[0]?.name ?? fallbackArtistName,
+  }));
+}
+
 export async function searchSpotifyTracks(
   accessToken: string,
   artistName: string,
   limit = 5
 ): Promise<SpotifyTrack[]> {
-  const params = new URLSearchParams({
-    q: `artist:${artistName}`,
-    type: "track",
-    limit: String(limit),
-  });
-  const res = await spotifyFetch(`/search?${params}`, accessToken);
-  const data = await res.json();
-  const items = data.tracks?.items ?? [];
-  return items.map((t: { uri: string; name: string; artists: Array<{ name: string }> }) => ({
-    uri: t.uri,
-    name: t.name,
-    artistName: t.artists?.[0]?.name ?? artistName,
-  }));
+  // Try strict artist-field filter first
+  let tracks = await runSpotifyTrackQuery(
+    accessToken,
+    `artist:${artistName}`,
+    limit,
+    artistName
+  );
+
+  // If zero results, fall back to plain-text search (handles short/ambiguous names)
+  if (tracks.length === 0) {
+    const fallback = await runSpotifyTrackQuery(accessToken, artistName, limit, artistName);
+    const norm = artistName.toLowerCase();
+    // Prefer tracks where the artist name closely matches
+    const matched = fallback.filter(
+      (t) =>
+        t.artistName.toLowerCase() === norm ||
+        t.artistName.toLowerCase().startsWith(norm) ||
+        norm.startsWith(t.artistName.toLowerCase())
+    );
+    tracks = matched.length > 0 ? matched : fallback;
+  }
+
+  if (tracks.length === 0) {
+    console.log(`[spotify] No tracks found for artist: "${artistName}"`);
+  }
+
+  return tracks;
 }
 
 export async function addTracksToSpotifyPlaylist(

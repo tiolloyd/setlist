@@ -11,6 +11,7 @@ import { getSupabase, getSessionId } from "@/lib/supabase";
 
 interface ConcertListProps {
   artists: ArtistWithConcerts[];
+  onPreferenceChange?: (artistId: string, preference: Preference | undefined) => void;
 }
 
 type Preference = "like" | "dislike";
@@ -23,7 +24,7 @@ function formatDate(dateStr: string): string {
   }
 }
 
-export function ConcertList({ artists }: ConcertListProps) {
+export function ConcertList({ artists, onPreferenceChange }: ConcertListProps) {
   const [preferences, setPreferences] = useState<Map<string, Preference>>(new Map());
   const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
 
@@ -67,6 +68,9 @@ export function ConcertList({ artists }: ConcertListProps) {
       return map;
     });
     setLoadingIds((prev) => new Set(prev).add(artist.id));
+
+    // Notify parent so it can exclude disliked artists from playlist generation
+    onPreferenceChange?.(artist.id, next);
 
     try {
       if (next === undefined) {
@@ -126,7 +130,7 @@ export function ConcertList({ artists }: ConcertListProps) {
         artists with upcoming concerts in your area
       </p>
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {artists.map((artist) => {
+        {artists.filter((a) => preferences.get(a.id) !== "dislike").map((artist) => {
           const pref = preferences.get(artist.id);
           const isLoading = loadingIds.has(artist.id);
 

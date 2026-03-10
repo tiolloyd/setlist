@@ -37,6 +37,16 @@ function ResultsContent() {
   const [fetchedArtists, setFetchedArtists] = useState<ArtistWithConcerts[]>([]);
   const [loading, setLoading] = useState(!hasContextData);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [dislikedIds, setDislikedIds] = useState<Set<string>>(new Set());
+
+  function handlePreferenceChange(artistId: string, preference: string | undefined) {
+    setDislikedIds((prev) => {
+      const next = new Set(prev);
+      if (preference === "dislike") next.add(artistId);
+      else next.delete(artistId);
+      return next;
+    });
+  }
 
   async function loadConcerts() {
     if (isNaN(lat) || isNaN(lng) || !startDate || !endDate) {
@@ -132,7 +142,10 @@ function ResultsContent() {
               </CardHeader>
               <CardContent>
                 {!loading && artists.length > 0 && (
-                  <PlaylistBuilder service={service} artists={artists} />
+                  <PlaylistBuilder
+                    service={service}
+                    artists={artists.filter((a) => !dislikedIds.has(a.id))}
+                  />
                 )}
                 {!loading && artists.length === 0 && (
                   <p className="text-sm text-muted-foreground">
@@ -200,7 +213,9 @@ function ResultsContent() {
             </Card>
           )}
 
-          {!loading && !fetchError && <ConcertList artists={artists} />}
+          {!loading && !fetchError && (
+            <ConcertList artists={artists} onPreferenceChange={handlePreferenceChange} />
+          )}
         </div>
       </div>
     </div>

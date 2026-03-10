@@ -93,12 +93,30 @@ export async function searchAppleMusicTracks(
   const songs: Array<{ id: string; attributes?: { name?: string; artistName?: string } }> =
     result?.data?.results?.songs?.data ?? [];
 
-  return songs.map((s) => ({
+  const tracks = songs.map((s) => ({
     id: s.id,
     type: "songs",
     name: s.attributes?.name ?? "",
     artistName: s.attributes?.artistName ?? artistName,
   }));
+
+  // Filter to tracks where the returned artist name closely matches the search term
+  if (tracks.length > 0) {
+    const norm = artistName.toLowerCase();
+    const matched = tracks.filter(
+      (t) =>
+        t.artistName.toLowerCase() === norm ||
+        t.artistName.toLowerCase().startsWith(norm) ||
+        norm.startsWith(t.artistName.toLowerCase())
+    );
+    if (matched.length > 0) return matched;
+  }
+
+  if (tracks.length === 0) {
+    console.log(`[apple-music] No tracks found for artist: "${artistName}"`);
+  }
+
+  return tracks;
 }
 
 export async function createAppleMusicPlaylist(

@@ -82,7 +82,7 @@ export async function fetchConcerts(params: {
   const startDateTime = `${startDate}T00:00:00Z`;
   const endDateTime = `${endDate}T23:59:59Z`;
 
-  const query = new URLSearchParams({
+  const baseParams = {
     apikey: apiKey,
     latlong: `${lat},${lng}`,
     radius: String(radius),
@@ -92,21 +92,46 @@ export async function fetchConcerts(params: {
     endDateTime,
     size: "50",
     sort: "date,asc",
-  });
+  };
 
-  const res = await fetch(
-    `https://app.ticketmaster.com/discovery/v2/events.json?${query}`,
+  const BASE_URL = "https://app.ticketmaster.com/discovery/v2/events.json";
+  const MAX_PAGES = 4; // 4 × 50 = 200 events max
+
+  const firstRes = await fetch(
+    `${BASE_URL}?${new URLSearchParams(baseParams)}`,
     { next: { revalidate: 300 } }
   );
 
-  if (!res.ok) {
-    const errorText = await res.text();
-    console.error("Ticketmaster API error:", res.status, errorText);
-    throw new Error(`Ticketmaster API returned ${res.status}`);
+  if (!firstRes.ok) {
+    const errorText = await firstRes.text();
+    console.error("Ticketmaster API error:", firstRes.status, errorText);
+    throw new Error(`Ticketmaster API returned ${firstRes.status}`);
   }
 
-  const data: TicketmasterResponse = await res.json();
-  const events = data._embedded?.events ?? [];
+  const firstData: TicketmasterResponse = await firstRes.json();
+  const totalPages = Math.min(firstData.page?.totalPages ?? 1, MAX_PAGES);
+
+  let allEvents = firstData._embedded?.events ?? [];
+
+  // Fetch remaining pages in parallel
+  if (totalPages > 1) {
+    const pageRequests = [];
+    for (let page = 1; page < totalPages; page++) {
+      const url = `${BASE_URL}?${new URLSearchParams({ ...baseParams, page: String(page) })}`;
+      pageRequests.push(
+        fetch(url, { next: { revalidate: 300 } })
+          .then((r) => (r.ok ? r.json() : { _embedded: { events: [] } }))
+          .then((d: TicketmasterResponse) => d._embedded?.events ?? [])
+          .catch(() => [] as TicketmasterEvent[])
+      );
+    }
+    const extraPages = await Promise.all(pageRequests);
+    for (const pageEvents of extraPages) {
+      allEvents = allEvents.concat(pageEvents);
+    }
+  }
+
+  const events = allEvents;
 
   // genre id → { ...GenreItem, subGenreIds: Set } for dedup
   const genreMap = new Map<
